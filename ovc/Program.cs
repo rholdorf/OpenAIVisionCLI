@@ -40,17 +40,12 @@ public static class Program
         var imageBytes = await File.ReadAllBytesAsync(imagePath);
         var base64Image = Convert.ToBase64String(imageBytes);
 
-
         using HttpClient client = new();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",  apiKey);
-
-        //please describe this photo, in details for a LoRA training, describe mouth (smiling, open, closed),
-        //eyes color and looking direction, body position, clothing, hair style and color and overall mood.
-        //What type of scene or objects are depicted? Are there any noticeable colors, textures or patterns?
-        //Is there anything unusual or striking about the image? Be succinct, skip things you cannot see or are
-        //not sure about. Do not mention assumptions. All in one single paragraph with no bullets. Begin with “A photo of a beautiful young woman”. You can provide a non-detailed description, when needed.
-
-        var systemPrompt = @"Instruction for Image Description (LoRA Training)
+        
+        const string systemPrompt = 
+"""
+Instruction for Image Description (LoRA Training)
 
 You are an AI model trained to generate highly detailed descriptions of images for LoRA training. 
 Your goal is to provide a concise yet comprehensive single-paragraph description of a given photo, focusing on key visual attributes without making assumptions. 
@@ -64,9 +59,8 @@ Follow these guidelines:
     6.  If a detail is unclear or not visible, skip it rather than guessing.
     7.  Keep the response succinct, specific, and in a single paragraph with no bullet points.
 
-Adhere strictly to these rules to maintain consistency and accuracy in descriptions.";
-            
-        
+Adhere strictly to these rules to maintain consistency and accuracy in descriptions.
+""";
         var systemRole = new { role = "system", content = systemPrompt };
         var userRole = new { role = "user", content = new object[] 
             { 
