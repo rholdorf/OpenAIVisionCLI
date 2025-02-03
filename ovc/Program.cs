@@ -1,10 +1,6 @@
-﻿using System;
-using System.IO;
-using System.Net.Http;
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace ovc;
 
@@ -16,16 +12,16 @@ public static class Program
     {
         if (args.Length < 2)
         {
-            Console.WriteLine("Uso: dotnet run <caminho_da_imagem> <prompt>");
+            Console.WriteLine("Use: dotnet run <caminho_da_imagem> <prompt>");
             return;
         }
-
+        
         var imagePath = args[0];
         var prompt = args[1];
-
+        
         if (!File.Exists(imagePath))
         {
-            Console.WriteLine("Erro: O arquivo de imagem não foi encontrado.");
+            Console.WriteLine("Error: File not found.");
             return;
         }
 
@@ -33,60 +29,42 @@ public static class Program
 
         if (string.IsNullOrEmpty(apiKey))
         {
-            Console.WriteLine("Erro: A variável de ambiente OPENAI_API_KEY não está definida.");
+            Console.WriteLine("Error: The OPENAI_API_KEY environment variable is not set.");
             return;
         }
 
-        var imageBytes = await File.ReadAllBytesAsync(imagePath);
-        var base64Image = Convert.ToBase64String(imageBytes);
+        var base64Image = GetBase64Image(imagePath);
 
         using HttpClient client = new();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",  apiKey);
-        
-        const string systemPrompt = 
-"""
-Instruction for Image Description (LoRA Training)
-
-You are an AI model trained to generate highly detailed descriptions of images for LoRA training. 
-Your goal is to provide a concise yet comprehensive single-paragraph description of a given photo, focusing on key visual attributes without making assumptions. 
-Follow these guidelines:
-
-    1.  Begin every description with “A photo of ” (if applicable).
-    2.  Describe the mouth (e.g., smiling, open, closed), eyes (color and looking direction), body position, clothing, hairstyle (including color), and overall mood.
-    3.  Include relevant details about the scene, objects, and background if visible.
-    4.  Note any striking, unusual, or visually distinctive features.
-    5.  Mention noticeable colors, textures, or patterns present in the image.
-    6.  If a detail is unclear or not visible, skip it rather than guessing.
-    7.  Keep the response succinct, specific, and in a single paragraph with no bullet points.
-
-Adhere strictly to these rules to maintain consistency and accuracy in descriptions.
-""";
-        var systemRole = new { role = "system", content = systemPrompt };
-        var userRole = new { role = "user", content = new object[] 
-            { 
-                new { type = "text", text = prompt },
-                new { type = "image_url", image_url = new { url = $"data:image/jpeg;base64,{base64Image}" } }
-            } 
-        };
-
-        var requestBody = new
-        {
-            model = "gpt-4o",
-            messages = new object[]
-            {
-                systemRole,
-                userRole
-            },
-            max_tokens = 500
-        };
-
-        var jsonContent = JsonSerializer.Serialize(requestBody);
+        var apiRequest = new ApiRequest(prompt, base64Image);
+        var jsonContent = JsonSerializer.Serialize(apiRequest);
+        Console.WriteLine(jsonContent);
         var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
         var response = await client.PostAsync(OPEN_AI_URL, content);
         var result = await response.Content.ReadAsStringAsync();
-
-        Console.WriteLine("Resposta da API:");
-        Console.WriteLine(result);
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse>(result);
+        
+        if(apiResponse?.choices == null || apiResponse.choices.Length == 0)
+        {
+            Console.WriteLine("WARNING: Unable to deserialize the API response.");
+            Console.WriteLine(result);
+            return;
+        }
+        
+        Console.WriteLine(apiResponse.choices[0].message.content);
+        DumpToFile(apiResponse.choices[0].message.content, imagePath);
+    }
+    
+    private static string GetBase64Image(string imagePath)
+    {
+        var bytes = File.ReadAllBytes(imagePath);
+        return Convert.ToBase64String(bytes);
+    }
+    
+    private static void DumpToFile(string content, string filePath)
+    {
+        var destinationFilePath = Path.ChangeExtension(filePath, ".txt");
+        File.WriteAllText(destinationFilePath, content);
     }
 }
